@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) Itay Grudev 2015 - 2018
+// Copyright (c) Itay Grudev 2015 - 2020
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -69,38 +69,50 @@ SingleApplicationPrivate::~SingleApplicationPrivate()
         delete socket;
     }
 
-    memory->lock();
-    InstancesInfo* inst = static_cast<InstancesInfo*>(memory->data());
-    if( server != nullptr ) {
-        server->close();
-        delete server;
-        inst->primary = false;
-        inst->primaryPid = -1;
-        inst->primaryUser[0] =  '\0';
-        inst->checksum = blockChecksum();
-    }
-    memory->unlock();
+    if( memory != nullptr ) {
+        memory->lock();
+        auto *inst = static_cast<InstancesInfo*>(memory->data());
+        if( server != nullptr ) {
+            server->close();
+            delete server;
+            inst->primary = false;
+            inst->primaryPid = -1;
+            inst->primaryUser[0] =  '\0';
+            inst->checksum = blockChecksum();
+        }
+        memory->unlock();
 
-    delete memory;
+        delete memory;
+    }
 }
 
-QByteArray SingleApplicationPrivate::getUsername(){
+QString SingleApplicationPrivate::getUsername()
+{
 #ifdef Q_OS_WIN
       wchar_t username[UNLEN + 1];
       // Specifies size of the buffer on input
       DWORD usernameLength = UNLEN + 1;
       if( GetUserNameW( username, &usernameLength ) )
-          return QString::fromWCharArray( username ).toUtf8();
-      return qgetenv( "USERNAME" );
+          return QString::fromWCharArray( username );
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+      return QString::fromLocal8Bit( qgetenv( "USERNAME" ) );
+#else
+      return qEnvironmentVariable( "USERNAME" );
+#endif
 #endif
 #ifdef Q_OS_UNIX
-      QByteArray username;
+      QString username;
       uid_t uid = geteuid();
       struct passwd *pw = getpwuid( uid );
       if( pw )
-          username = pw->pw_name;
-      if( username.isEmpty() )
-          username = qgetenv( "USER" );
+          username = QString::fromLocal8Bit( pw->pw_name );
+      if ( username.isEmpty() ) {
+#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
+          username = QString::fromLocal8Bit( qgetenv( "USER" ) );
+#else
+          username = qEnvironmentVariable( "USER" );
+#endif
+      }
       return username;
 #endif
 }
@@ -127,7 +139,7 @@ void SingleApplicationPrivate::genBlockServerName()
 
     // User level block requires a user specific data in the hash
     if( options & SingleApplication::Mode::User ) {
-        appData.addData( getUsername() );
+        appData.addData( getUsername().toUtf8() );
     }
 
     // Replace the backslash in RFC 2045 Base64 [a-zA-Z0-9+/=] to comply with
@@ -137,7 +149,7 @@ void SingleApplicationPrivate::genBlockServerName()
 
 void SingleApplicationPrivate::initializeMemoryBlock()
 {
-    InstancesInfo* inst = static_cast<InstancesInfo*>( memory->data() );
+    auto *inst = static_cast<InstancesInfo*>( memory->data() );
     inst->primary = false;
     inst->secondary = 0;
     inst->primaryPid = -1;
@@ -171,12 +183,11 @@ void SingleApplicationPrivate::startPrimary()
     );
 
     // Reset the number of connections
-    InstancesInfo* inst = static_cast <InstancesInfo*>( memory->data() );
+    auto *inst = static_cast <InstancesInfo*>( memory->data() );
 
     inst->primary = true;
     inst->primaryPid = q->applicationPid();
-    strncpy( inst->primaryUser, getUsername().data(), 127 );
-    inst->primaryUser[127] = '\0';
+    qstrncpy( inst->primaryUser, getUsername().toUtf8().data(), sizeof(inst->primaryUser) );
     inst->checksum = blockChecksum();
 
     instanceNumber = 0;
@@ -254,7 +265,7 @@ qint64 SingleApplicationPrivate::primaryPid()
     qint64 pid;
 
     memory->lock();
-    InstancesInfo* inst = static_cast<InstancesInfo*>( memory->data() );
+    auto *inst = static_cast<InstancesInfo*>( memory->data() );
     pid = inst->primaryPid;
     memory->unlock();
 
@@ -266,7 +277,7 @@ QString SingleApplicationPrivate::primaryUser()
     QByteArray username;
 
     memory->lock();
-    InstancesInfo* inst = static_cast<InstancesInfo*>( memory->data() );
+    auto *inst = static_cast<InstancesInfo*>( memory->data() );
     username = inst->primaryUser;
     memory->unlock();
 

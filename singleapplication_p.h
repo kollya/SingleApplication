@@ -1,6 +1,6 @@
 // The MIT License (MIT)
 //
-// Copyright (c) Itay Grudev 2015 - 2016
+// Copyright (c) Itay Grudev 2015 - 2020
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,11 +46,9 @@ struct InstancesInfo {
 };
 
 struct ConnectionInfo {
-    explicit ConnectionInfo() :
-        msgLen(0), instanceId(0), stage(0) {}
-    qint64 msgLen;
-    quint32 instanceId;
-    quint8 stage;
+    qint64 msgLen = 0;
+    quint32 instanceId = 0;
+    quint8 stage = 0;
 };
 
 class SingleApplicationPrivate : public QObject {
@@ -70,9 +68,9 @@ public:
     Q_DECLARE_PUBLIC(SingleApplication)
 
     SingleApplicationPrivate( SingleApplication *q_ptr );
-     ~SingleApplicationPrivate();
+    ~SingleApplicationPrivate() override;
 
-    QByteArray getUsername();
+    QString getUsername();
     void genBlockServerName();
     void initializeMemoryBlock();
     void startPrimary();
